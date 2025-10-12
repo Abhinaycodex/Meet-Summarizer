@@ -3,12 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import connectDB  from './config/db.js';
-import connectRedis from './config/redis.js';
+// import {connectRedis, getRedisClient} from './config/redis.js';
 import summaryRoutes from './src/routes/SummaryRoute.js';
 import errorMiddleware from './src/middlewares/errorMiddleware.js';
 import dotenv from 'dotenv';
-import logger from './src/utils/logger.js';
-
+import authRoutes from './src/routes/authRoute.js';
 
 dotenv.config();
 
@@ -17,10 +16,7 @@ const PORT = process.env.PORT || 3000;
 
 // Security middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true
-}));
+app.use(cors());
 
 // Rate limiting
 const limiter = rateLimit({
@@ -35,9 +31,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Routes
 app.use('/api/summaries', summaryRoutes);
+app.use('/api/auth', authRoutes);
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
@@ -48,13 +45,14 @@ app.use(errorMiddleware);
 async function startServer() {
   try {
     await connectDB();
-    await connectRedis();
+    // await connectRedis();
+    // await getRedisClient().ping();
     
     app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`);
+      console.log(`Server running on port ${PORT}`);
     });
   } catch (error) {
-    logger.error('Failed to start server:', error);
+    console.error('Failed to start server:', error);
     process.exit(1);
   }
 }

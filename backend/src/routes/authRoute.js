@@ -1,6 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import { body, validationResult } from 'express-validator';
 import User from '../models/UserModel.js';
 import authMiddleware from '../middlewares/authMiddleware.js';
@@ -30,35 +30,35 @@ router.post('/register', [
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    
 
     // Create user
     const user = new User({
       email,
-      password: hashedPassword,
+      password,
       firstName,
       lastName
     });
 
+    console.log("User password hash from DB:", user.password);
     await user.save();
 
     // Generate JWT
     const token = jwt.sign(
       { id: user._id, email: user.email },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRATION || '7d' } // Use env variable for expiration
+      { expiresIn:  '7d' } 
     );
 
-    logger.info(`User registered: ${email}`);
+    console.log(`User registered: ${email}`);
 
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user
+      user,
     });
   } catch (error) {
-    logger.error('Registration error:', error);
+    console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -66,7 +66,7 @@ router.post('/register', [
 // Login
 router.post('/login', [
   body('email').isEmail().normalizeEmail(),
-  body('password').exists()
+  body('password')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -79,13 +79,13 @@ router.post('/login', [
     // Find user
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Invalid credentials at email' });
     }
 
     // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Invalid credentials at password' });
     }
 
     // Update last login
@@ -99,7 +99,7 @@ router.post('/login', [
       { expiresIn: process.env.JWT_EXPIRATION || '7d' }
     );
 
-    logger.info(`User logged in: ${email}`);
+   
 
     res.json({
       message: 'Login successful',
@@ -121,7 +121,7 @@ router.get('/me', authMiddleware, async (req, res) => {
     }
     res.json(user);
   } catch (error) {
-    logger.error('Get user error:', error);
+    console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user info' });
   }
 });

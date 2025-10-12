@@ -40,10 +40,12 @@ class AIService {
       throw new Error('Failed to generate summary');
     }
   }
+//markdownlint-disable MD040
+//allow embedded JSON
 
-  buildSummaryPrompt(text) {
+  buildSummaryPrompt(text) { 
     return `
-Please analyze this meeting transcript/document and provide:
+Please analyze this meeting transcript/document and provide :  
 
 1. A concise summary (2-3 paragraphs)
 2. Key points discussed (bullet points)
@@ -86,13 +88,13 @@ ${text}
 
   async transcribeAudio(audioBuffer) {
     try {
-      logger.info('Audio transcription requested');
+      console.log('Audio transcription requested');
       return {
         text: 'Mock transcription of audio content...',
         confidence: 0.9
       };
     } catch (error) {
-      logger.error('Audio transcription error:', error);
+      console.error('Audio transcription error:', error);
       throw new Error('Failed to transcribe audio');
     }
   }
