@@ -22,7 +22,6 @@ const upload = multer({
   }
 });
 
-
 router.post('/upload', authMiddleware, upload.single('file'), summaryController.uploadAndSummarize);
 router.post('/text', authMiddleware, summaryController.summarizeText);
 router.get('/', authMiddleware, summaryController.getAllSummaries);

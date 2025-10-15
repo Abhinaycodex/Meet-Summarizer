@@ -6,9 +6,9 @@ class AIService {
     this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
 
-  async generateSummary(text) {
+  async generateSummary(file) {
     try {
-      const prompt = this.buildSummaryPrompt(text);
+      const prompt = this.buildSummaryPrompt(file);
       
       const response = await this.openai.chat.completions.create({
         model: 'gpt-3.5-turbo',
@@ -43,7 +43,7 @@ class AIService {
 //markdownlint-disable MD040
 //allow embedded JSON
 
-  buildSummaryPrompt(text) { 
+  buildSummaryPrompt(file) { 
     return `
 Please analyze this meeting transcript/document and provide :  
 
@@ -65,7 +65,7 @@ Format your response as JSON with the following structure:
 }
 
 Text to analyze:
-${text}
+${file}
     `;
   }
 

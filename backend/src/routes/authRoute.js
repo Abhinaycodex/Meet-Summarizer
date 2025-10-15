@@ -99,8 +99,6 @@ router.post('/login', [
       { expiresIn: process.env.JWT_EXPIRATION || '7d' }
     );
 
-   
-
     res.json({
       message: 'Login successful',
       token,

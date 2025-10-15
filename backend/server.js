@@ -1,4 +1,4 @@
-import express from 'express';
+import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -6,10 +6,11 @@ import connectDB  from './config/db.js';
 // import {connectRedis, getRedisClient} from './config/redis.js';
 import summaryRoutes from './src/routes/SummaryRoute.js';
 import errorMiddleware from './src/middlewares/errorMiddleware.js';
-import dotenv from 'dotenv';
+import express from 'express';
 import authRoutes from './src/routes/authRoute.js';
 
-dotenv.config();
+dotenv.config({ path: './backend/.env' });
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,6 +33,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Routes
 app.use('/api/summaries', summaryRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/uploads', express.static('uploads'));
 
 // Health check
 app.get('/', (req, res) => {

@@ -30,7 +30,7 @@ const Home = () => {
               ) : (
                 <>
                   <Link
-                    to="/register"
+                    to="/working"
                     className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
                   >
                     Get Started Free
@@ -41,6 +41,9 @@ const Home = () => {
                   >
                     Sign In
                   </Link>
+                  <Link 
+                    to="/record"
+                    className='"bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-800 transition-colors'> Record </Link>
                 </>
               )}
             </div>

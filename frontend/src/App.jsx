@@ -7,6 +7,8 @@ import Home from '../src/pages/Home';
 import Dashboard from '../src/pages/Dashboard';
 import SummaryView from './pages/SummaryView';
 import Navbar from './components/Navbar';
+import Working from './pages/working';
+import Recorder from './components/Recoder';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -36,6 +38,8 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/dashboard" element={<Dashboard />}/>
             <Route path="/SummaryView" element={<SummaryView />}/>
+            <Route path="/working" element={<Working />} />
+            <Route path="/record" element={<Recorder />} />
             <Route
               path="/summary/:id"
               element={

@@ -1,11 +1,17 @@
 import { OpenAI } from 'openai';
 import logger from '../utils/logger.js';
+import dotenv from "dotenv";
+dotenv.config();
+
+
 
 class AIService {
   constructor() {
     // Check if OpenAI API key is provided
+    console.log("OPENAI KEY:", process.env.OPENAI_API_KEY ? "Loaded ✅" : "Missing ❌");
+
     if (!process.env.OPENAI_API_KEY) {
-      logger.warn('OpenAI API key not found. AI summarization will use mock responses.');
+      console.log('OpenAI API key not found. AI summarization will use mock responses.');
       this.openai = null;
       this.useMockResponses = true;
     } else {
@@ -14,9 +20,9 @@ class AIService {
           apiKey: process.env.OPENAI_API_KEY
         });
         this.useMockResponses = false;
-        logger.info('OpenAI API initialized successfully');
+        console.log('OpenAI API initialized successfully');
       } catch (error) {
-        logger.error('Failed to initialize OpenAI:', error);
+        console.log('Failed to initialize OpenAI:', error);
         this.openai = null;
         this.useMockResponses = true;
       }
@@ -27,7 +33,7 @@ class AIService {
     try {
       // Use mock response if OpenAI is not available
       if (this.useMockResponses) {
-        logger.info('Using mock AI response - OpenAI API key not configured');
+        console.log('Using mock AI response - OpenAI API key not configured');
         return this.getMockSummary(text);
       }
 
@@ -58,10 +64,10 @@ class AIService {
         confidence: 0.85
       };
     } catch (error) {
-      logger.error('AI service error:', error);
+      console.log('AI service error:', error);
       
       // Fallback to mock response on error
-      logger.info('Falling back to mock response due to AI service error');
+      console.log('Falling back to mock response due to AI service error');
       return this.getMockSummary(text);
     }
   }
@@ -131,7 +137,7 @@ ${text}
       return parsed;
     } catch (error) {
       // Fallback: parse text format
-      logger.warn('AI response not in JSON format, parsing manually');
+      console.log('AI response not in JSON format, parsing manually');
       
       return {
         summary: response.substring(0, 500) + '...',
@@ -145,7 +151,7 @@ ${text}
     try {
       // Use mock response if OpenAI is not available
       if (this.useMockResponses) {
-        logger.info('Using mock audio transcription - OpenAI API key not configured');
+        console.log('Using mock audio transcription - OpenAI API key not configured');
         return {
           text: `Mock transcription of audio content. The audio file contained approximately ${Math.floor(audioBuffer.length / 1000)} seconds of content. This would typically contain meeting discussions, participant introductions, key decisions, and action items that were discussed during the session.`,
           confidence: 0.7

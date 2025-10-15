@@ -1,5 +1,3 @@
-
-
 import summaryService from '../services/SummaryService.js';
 import logger from '../utils/logger.js';
 import { validationResult } from 'express-validator';
