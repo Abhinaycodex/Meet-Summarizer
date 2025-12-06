@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Video, Square, Clock, Download, AlertCircle, CheckCircle } from 'lucide-react';
+import { Video, Square, Clock, Download, AlertCircle, CheckCircle, FileText, Loader } from 'lucide-react';
 
 const Recorder = () => {
   const [recording, setRecording] = useState(false);
@@ -9,6 +9,8 @@ const Recorder = () => {
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [meetingData, setMeetingData] = useState(null);
+
   const timerRef = useRef(null);
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -44,8 +46,9 @@ const Recorder = () => {
     try {
       setError('');
       setUploadSuccess(false);
+      setMeetingData(null);
       chunksRef.current = [];
-      
+
       // Request screen capture with audio
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
@@ -78,7 +81,7 @@ const Recorder = () => {
 
         // Create file and upload
         const file = new File([blob], `meeting-${Date.now()}.webm`, { type: 'video/webm' });
-        await uploadFile(file, blob);
+        await uploadFile(file);
 
         // Stop all tracks
         if (streamRef.current) {
@@ -109,44 +112,59 @@ const Recorder = () => {
   };
 
   const uploadFile = async (file) => {
-  try {
-    setUploading(true);
-    setError('');
+    try {
+      setUploading(true);
+      setUploadSuccess(false);
+      setError("");
 
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', 'uploads');
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", `Meeting Recording - ${new Date().toLocaleString()}`);
 
-    const response = await fetch(
-      'https://api.cloudinary.com/v1_1/dnu3l4w7z/video/upload',
-      {
-        method: 'POST',
-        body: formData,
+      console.log('Uploading to backend...');
+
+      const response = await fetch("http://localhost:5000/api/upload", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Upload failed: ${response.status}`);
       }
-    );
 
-    if (!response.ok) {
-      throw new Error(`Upload failed: ${response.status}`);
+      const data = await response.json();
+      console.log("Backend response:", data);
+
+      if (!data.meeting) {
+        throw new Error("Server did not return meeting data.");
+      }
+
+      setMeetingData(data.meeting);
+      setUploadSuccess(true);
+
+      // Update video URL to Cloudinary URL
+      if (data.meeting.videoUrl) {
+        setRecordedVideo(data.meeting.videoUrl);
+      }
+
+      return data.meeting;
+
+    } catch (err) {
+      console.error("Upload error:", err);
+      setError(err.message || "Failed to upload recording");
+      return null;
+    } finally {
+      setUploading(false);
     }
-
-    const data = await response.json();
-    console.log('Cloudinary upload successful:', data);
-    setUploadSuccess(true);
-    setRecordedVideo(data.secure_url); // You can now use Cloudinary-hosted video
-    setUploading(false);
-  } catch (err) {
-    setError(`Failed to upload to Cloudinary: ${err.message}`);
-    console.error('Cloudinary upload error:', err);
-    setUploading(false);
-  }
-};
-
+  };
 
   const downloadVideo = () => {
     if (recordedVideo) {
       const a = document.createElement('a');
       a.href = recordedVideo;
       a.download = `meeting-${Date.now()}.webm`;
+      a.target = '_blank';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -162,7 +180,7 @@ const Recorder = () => {
             <Video className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Screen Recorder</h1>
-          <p className="text-gray-600">Record your screen with audio</p>
+          <p className="text-gray-600">Record your screen with audio and get AI summary</p>
         </div>
 
         {/* Timer Display */}
@@ -196,16 +214,19 @@ const Recorder = () => {
         {uploadSuccess && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-start space-x-3">
             <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-green-800 font-medium">Recording uploaded successfully!</p>
+            <p className="text-sm text-green-800 font-medium">Recording processed successfully!</p>
           </div>
         )}
 
-        {/* Upload Status */}
+        {/* Upload/Processing Status */}
         {uploading && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
             <div className="flex items-center space-x-3">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-              <p className="text-sm text-blue-800 font-medium">Uploading recording...</p>
+              <Loader className="animate-spin h-5 w-5 text-blue-600" />
+              <div>
+                <p className="text-sm text-blue-800 font-medium">Processing your recording...</p>
+                <p className="text-xs text-blue-600 mt-1">This may take a few minutes. Please wait.</p>
+              </div>
             </div>
           </div>
         )}
@@ -215,11 +236,10 @@ const Recorder = () => {
           <button
             onClick={recording ? stopRecording : startRecording}
             disabled={uploading}
-            className={`w-full max-w-xs py-4 px-8 rounded-xl font-semibold text-white text-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${
-              recording
+            className={`w-full max-w-xs py-4 px-8 rounded-xl font-semibold text-white text-lg transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none ${recording
                 ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
                 : 'bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-center space-x-3">
               {recording ? (
@@ -238,15 +258,17 @@ const Recorder = () => {
 
           {/* Download Button */}
           {recordedVideo && !recording && (
-            <button
-              onClick={downloadVideo}
-              className="w-full max-w-xs py-3 px-6 rounded-xl font-semibold text-purple-600 bg-purple-100 hover:bg-purple-200 transition-all transform hover:scale-105 active:scale-95"
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <Download className="h-5 w-5" />
-                <span>Download Recording</span>
-              </div>
-            </button>
+            <div className="w-full max-w-xs space-y-3">
+              <button
+                onClick={downloadVideo}
+                className="w-full py-3 px-6 rounded-xl font-semibold text-purple-600 bg-purple-100 hover:bg-purple-200 transition-all transform hover:scale-105 active:scale-95"
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <Download className="h-5 w-5" />
+                  <span>Download Recording</span>
+                </div>
+              </button>
+            </div>
           )}
         </div>
 
@@ -266,6 +288,60 @@ const Recorder = () => {
           </div>
         )}
 
+        {/* Meeting Summary & Details */}
+        {meetingData && (
+          <div className="mt-6 space-y-4">
+            {/* Summary */}
+            {meetingData.summary && (
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg p-5">
+                <div className="flex items-start space-x-3">
+                  <FileText className="h-5 w-5 text-indigo-600 flex-shrink-0 mt-1" />
+                  <div className="flex-1">
+                    <h4 className="text-md font-semibold text-gray-900 mb-2">Meeting Summary</h4>
+                    <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+                      {meetingData.summary}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Action Items */}
+            {meetingData.actionItems && meetingData.actionItems.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-5">
+                <h4 className="text-md font-semibold text-gray-900 mb-3 flex items-center">
+                  <CheckCircle className="h-5 w-5 text-amber-600 mr-2" />
+                  Action Items
+                </h4>
+                <ul className="space-y-2">
+                  {meetingData.actionItems.map((item, index) => (
+                    <li key={index} className="text-sm text-gray-700 flex items-start">
+                      <span className="text-amber-600 mr-2">•</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Meeting Info */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-gray-500">Title:</span>
+                  <p className="font-medium text-gray-900">{meetingData.title}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Uploaded:</span>
+                  <p className="font-medium text-gray-900">
+                    {new Date(meetingData.uploadedAt).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Instructions */}
         <div className="mt-8 pt-6 border-t border-gray-200">
           <h3 className="text-sm font-semibold text-gray-900 mb-2">How to use:</h3>
@@ -273,7 +349,9 @@ const Recorder = () => {
             <li>• Click "Start Recording" to begin screen capture</li>
             <li>• Select the screen/window you want to record</li>
             <li>• Click "Stop Recording" when finished</li>
-            <li>• The video will automatically upload and be available for download</li>
+            <li>• The video will be automatically processed with AI</li>
+            <li>• You'll receive a summary, transcript, and action items</li>
+            <li>• Download the recording anytime</li>
           </ul>
         </div>
       </div>

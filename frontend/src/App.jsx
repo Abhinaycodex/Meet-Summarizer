@@ -7,7 +7,7 @@ import Home from '../src/pages/Home';
 import Dashboard from '../src/pages/Dashboard';
 import SummaryView from './pages/SummaryView';
 import Navbar from './components/Navbar';
-import Working from './pages/working';
+import Working from './pages/Working';
 import Recorder from './components/Recoder';
 
 // Protected Route Component

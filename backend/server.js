@@ -9,7 +9,7 @@ import errorMiddleware from './src/middlewares/errorMiddleware.js';
 import express from 'express';
 import authRoutes from './src/routes/authRoute.js';
 
-dotenv.config({ path: './backend/.env' });
+dotenv.config();
 
 
 const app = express();
@@ -31,9 +31,8 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Routes
-app.use('/api/summaries', summaryRoutes);
+app.use('/api', summaryRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/uploads', express.static('uploads'));
 
 // Health check
 app.get('/', (req, res) => {

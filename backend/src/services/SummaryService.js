@@ -29,6 +29,10 @@ class AIService {
     }
   }
 
+  uploadFile(){
+
+  }
+
   async generateSummary(text) {
     try {
       // Use mock response if OpenAI is not available
@@ -65,8 +69,8 @@ class AIService {
       };
     } catch (error) {
       console.log('AI service error:', error);
-      
-      // Fallback to mock response on error
+      // 
+      // Fallback to mock response on error 
       console.log('Falling back to mock response due to AI service error');
       return this.getMockSummary(text);
     }

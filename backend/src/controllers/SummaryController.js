@@ -1,28 +1,36 @@
+// backend/src/controllers/SummaryController.js
 import summaryService from '../services/SummaryService.js';
 import logger from '../utils/logger.js';
 import { validationResult } from 'express-validator';
+import { uploadMeeting } from './meetingController.js';
 
 class SummaryController {
+
+  // Delegate video/audio uploads to meeting controller
   async uploadAndSummarize(req, res, next) {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
-      const { title, participants } = req.body;
-      const userId = req.user.id;
+      const fileType = req.file.mimetype;
 
-      const result = await summaryService.processFileUpload({
+      // If it's a video or audio file, use meeting controller
+      if (fileType.startsWith('video/') || fileType.startsWith('audio/')) {
+        return uploadMeeting(req, res);
+      }
+
+      // For documents (PDF, DOCX, TXT), process differently
+      const result = await summaryService.processDocument({
         file: req.file,
-        title,
-        participants: participants ? JSON.parse(participants) : [],
-        userIdoi
+        userId: req.user?.id,
+        title: req.body.title,
+        participants: req.body.participants
       });
 
-      res.status(202).json({
-        message: 'File uploaded successfully, processing started',
-        summaryId: result.summaryId,
-        status: 'processing'
+      res.status(200).json({
+        message: 'Document processed successfully',
+        summary: result
       });
     } catch (error) {
       logger.error('Upload error:', error);
@@ -49,7 +57,7 @@ class SummaryController {
 
       res.json(result);
     } catch (error) {
-      logger.erro('Text summarization error:', error);
+      logger.error('Text summarization error:', error);
       next(error);
     }
   }
