@@ -15,6 +15,8 @@ class SummaryController {
 
       const fileType = req.file.mimetype;
 
+
+
       // If it's a video or audio file, use meeting controller
       if (fileType.startsWith('video/') || fileType.startsWith('audio/')) {
         return uploadMeeting(req, res);

@@ -10,10 +10,11 @@ import https from "https";
 import http from "http";
 import Meeting from "../models/Meeting.js";
 import cloudinary from '../../config/cloudinary.js';
-import aiService from '../services/aiService.js';
+import { GoogleGenAI, createUserContent, createPartFromUri } from "@google/genai";
 
 ffmpeg.setFfmpegPath(ffmpegPath);
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// const openai = new OpenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Helper: extract action items
 function extractActionItems(summary = "") {
@@ -109,8 +110,9 @@ const downloadVideoFromCloudinary = async (videoUrl, outputPath) => {
 };
 
 // Extract audio from video file
-// backend/src/controllers/meetingController.js
+// Extract audio from video file
 const extractAudio = (videoPath, audioPath) => {
+  console.log("Starting audio extraction...");
   return new Promise((resolve, reject) => {
     // 0) Ensure video file exists
     if (!fs.existsSync(videoPath)) {
@@ -125,111 +127,110 @@ const extractAudio = (videoPath, audioPath) => {
 
     // 2) Quick sanity check: can we write here?
     try {
-      const testPath = path.join(dir, '.ffmpeg_write_test');
-      fs.writeFileSync(testPath, 'ok');
+      const testPath = path.join(dir, ".ffmpeg_write_test");
+      fs.writeFileSync(testPath, "ok");
       fs.unlinkSync(testPath);
     } catch (e) {
       return reject(
-        new Error(
-          `Cannot write to directory ${dir}: ${e.message}`
-        )
+        new Error(`Cannot write to directory ${dir}: ${e.message}`)
       );
     }
 
     console.log(`🎵 Starting audio extraction from: ${videoPath}`);
     console.log(`🎵 Target audio path: ${audioPath}`);
 
-    // Use explicit WAV codec and sample rate to avoid platform-specific ffmpeg issues
     try {
       const command = ffmpeg(videoPath)
         .noVideo()
         .audioChannels(1)
-        .audioCodec('pcm_s16le') // standard WAV PCM codec
-        .audioFrequency(16000) // 16kHz is a good default for speech
-        .format('wav')
-        .outputOptions('-y'); // overwrite if exists
+        .audioCodec("pcm_s16le") // WAV PCM
+        .audioFrequency(16000)   // 16 kHz for speech
+        .format("wav")
+        .outputOptions("-y");    // overwrite if exists
 
-      command.on('start', (commandLine) => {
-        console.log('FFmpeg command:', commandLine);
+      command.on("start", (commandLine) => {
+        console.log("FFmpeg command:", commandLine);
       });
 
-      command.on('progress', (progress) => {
+      command.on("progress", (progress) => {
         if (progress.percent) {
           console.log(`Processing: ${Math.round(progress.percent)}% done`);
         }
       });
 
-      command.on('end', () => {
-        console.log('✅ Audio extraction complete');
+      command.on("end", () => {
+        console.log("✅ Audio extraction complete");
         resolve();
       });
 
-      command.on('error', (err, stdout, stderr) => {
-        console.error('❌ Audio extraction error:', err?.message || err);
-        if (stderr) console.error('FFmpeg stderr:', stderr);
-        return reject(new Error(`Audio extraction failed: ${err?.message || 'unknown error'}`));
+      command.on("error", (err, stdout, stderr) => {
+        console.error("❌ Audio extraction error:", err?.message || err);
+        if (stderr) console.error("FFmpeg stderr:", stderr);
+        reject(
+          new Error(
+            `Audio extraction failed: ${err?.message || "unknown error"}`
+          )
+        );
       });
 
-      // Use .save() which is more explicit than .run() for outputs
       command.save(audioPath);
     } catch (err) {
-      console.error('❌ Failed to start ffmpeg command:', err);
-      return reject(new Error(`Failed to start audio extraction: ${err.message}`));
+      console.error("❌ Failed to start ffmpeg command:", err);
+      reject(
+        new Error(`Failed to start audio extraction: ${err.message}`)
+      );
     }
   });
 };
 
 
-
-// Transcribe audio using OpenAI Whisper
-const transcribeAudio = async (audioPath) => {
-  // Check if audio file exists and has content
+async function transcribeAudio(audioPath) {
   if (!fs.existsSync(audioPath)) {
     throw new Error(`Audio file not found: ${audioPath}`);
   }
 
   const stats = fs.statSync(audioPath);
   if (stats.size === 0) {
-    throw new Error('Audio file is empty');
+    throw new Error("Audio file is empty");
   }
 
-  console.log(`🎤 Transcribing audio file (${(stats.size / 1024 / 1024).toFixed(2)} MB)...`);
+  console.log(
+    `🎤 Transcribing audio file with Gemini (${(
+      stats.size /
+      1024 /
+      1024
+    ).toFixed(2)} MB)...`
+  );
 
-  // If OpenAI key is not configured, fall back to internal aiService mock
-  if (!process.env.OPENAI_API_KEY) {
-    console.warn('OpenAI API key not found - using local mock transcription');
-    const buffer = await fsPromises.readFile(audioPath);
-    const result = await aiService.transcribeAudio(buffer);
-    return typeof result === 'string' ? result : result?.text ?? '';
+  // 1️⃣ Upload the WAV file to Gemini Files API
+  const myfile = await ai.files.upload({
+    file: audioPath,                 // local path to your temp .wav
+    config: { mimeType: "audio/wav" } // you created 16kHz mono WAV with ffmpeg
+  });
+
+  // 2️⃣ Ask Gemini to generate a transcript
+  const result = await ai.models.generateContent({
+    model: "gemini-2.5-flash",       // or another Gemini model if you want
+    contents: createUserContent([
+      createPartFromUri(myfile.uri, myfile.mimeType),
+      "Generate a transcript of the speech.",
+    ]),
+  });
+
+  const text = (result.text || "").trim();
+  if (!text) {
+    throw new Error("Gemini returned empty transcript");
   }
 
-  try {
-    const transcription = await openai.audio.transcriptions.create({
-      file: fs.createReadStream(audioPath),
-      model: "whisper-1",
-      language: "en",
-    });
+  console.log(
+    `✅ Gemini transcription complete (${text.length} characters)`
+  );
 
-    const transcriptText = transcription?.text?.trim?.() ?? transcription?.data?.text ?? "";
+  return text;
+}
 
-    if (!transcriptText) {
-      throw new Error('Transcription returned empty text');
-    }
 
-    console.log(`✅ Transcription complete (${transcriptText.length} characters)`);
-    return transcriptText;
-  } catch (err) {
-    console.error('OpenAI transcription failed, falling back to local mock:', err?.message ?? err);
-    try {
-      const buffer = await fsPromises.readFile(audioPath);
-      const result = await aiService.transcribeAudio(buffer);
-      return typeof result === 'string' ? result : result?.text ?? '';
-    } catch (fallbackErr) {
-      console.error('Fallback transcription also failed:', fallbackErr);
-      throw new Error('All transcription attempts failed');
-    }
-  }
-};
+
 
 // Generate summary using GPT
 const generateSummary = async (transcript) => {
@@ -245,17 +246,15 @@ Transcript:
 ${transcript}
   `;
 
-  const summaryResponse = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: "You are a professional meeting summarizer." },
-      { role: "user", content: summaryPrompt },
-    ],
-    temperature: 0.2,
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: createUserContent([summaryPrompt]),
   });
 
-  return summaryResponse?.choices?.[0]?.message?.content?.trim() ?? "";
+  return response.text?.trim() ?? "";
 };
+
+
 
 // Main handler: upload, extract, transcribe, summarize, save
 
@@ -283,7 +282,7 @@ export const uploadMeeting = async (req, res) => {
     );
 
     // 1️⃣ Save buffer to local temp video file
-    console.log("💾 Saving uploaded video to temp file...");
+    console.log("💾 Saving upladed video to temp file...");
     await fsPromises.writeFile(tempVideoPath, req.file.buffer);
     const videoStats = await fsPromises.stat(tempVideoPath);
     console.log(`✅ Video saved locally (${(videoStats.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -331,10 +330,6 @@ export const uploadMeeting = async (req, res) => {
     });
     await meeting.save();
 
-    // 8️⃣ Clean up
-    await fsPromises.rm(tempVideoPath, { force: true }).catch(() => {});
-    await fsPromises.rm(tempAudioPath, { force: true }).catch(() => {});
-
     return res.status(200).json({
       message: "Meeting processed successfully",
       meeting: {
@@ -350,12 +345,7 @@ export const uploadMeeting = async (req, res) => {
   } catch (error) {
     console.error("❌ Upload Error:", error);
 
-    if (tempVideoPath) {
-      await fsPromises.rm(tempVideoPath, { force: true }).catch(() => {});
-    }
-    if (tempAudioPath) {
-      await fsPromises.rm(tempAudioPath, { force: true }).catch(() => {});
-    }
+ 
 
     return res.status(500).json({
       error: error?.message ?? "Unknown error",
